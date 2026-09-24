@@ -339,6 +339,7 @@ pwsh -File publish.ps1 -SkipTests
 | [docs/api.md](docs/api.md) | 全部 17 个 API 端点、请求响应结构、错误码全表 |
 | [docs/database.md](docs/database.md) | 8 张表的完整 Schema、索引、位图设计 |
 | [docs/testing.md](docs/testing.md) | 测试矩阵（220 个）、双机手工验收清单 |
+| [docs/defect-log.md](docs/defect-log.md) | 逐轮代码审查与修复日志：每处缺陷的触发条件、根因、修复与反证 |
 
 ---
 
