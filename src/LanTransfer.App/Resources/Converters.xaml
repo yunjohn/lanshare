@@ -1,0 +1,54 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:conv="clr-namespace:LanTransfer.App.Converters">
+
+    <!-- 布尔 → 可见性 -->
+    <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+
+    <!-- 布尔 → 取反 -->
+    <conv:InverseBooleanConverter x:Key="InverseBoolean" />
+
+    <!-- 字节 → 可读大小 -->
+    <conv:ByteSizeConverter x:Key="ByteSize" />
+
+    <!-- 速度 → MB/s -->
+    <conv:SpeedConverter x:Key="Speed" />
+
+    <!-- 剩余时间 -->
+    <conv:EtaConverter x:Key="Eta" />
+
+    <!-- 百分比 -->
+    <conv:PercentConverter x:Key="Percent" />
+
+    <!-- 传输状态 → 中文名 -->
+    <conv:TransferStateTextConverter x:Key="StateText" />
+
+    <!-- 传输状态 → 颜色画刷 -->
+    <conv:TransferStateBrushConverter x:Key="StateBrush" />
+
+    <!-- 传输方向 → 箭头 -->
+    <conv:DirectionArrowConverter x:Key="DirectionArrow" />
+
+    <!-- 同步状态 → 中文名 -->
+    <conv:SyncStatusTextConverter x:Key="SyncStatusText" />
+
+    <!-- 同步冲突 + 裁决方式 → 命令参数 -->
+    <conv:ConflictRequestConverter x:Key="ConflictRequest" />
+
+    <!-- 空字符串 → 可见性 -->
+    <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
+
+    <!-- 对象非 null / 为 null → 可见性 -->
+    <conv:ObjectToVisibilityConverter x:Key="ObjectToVisibility" />
+    <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
+
+    <!-- 枚举 → 中文名（设置页） -->
+    <conv:EnumDisplayConverter x:Key="EnumDisplay" />
+
+    <!-- 导航索引 → 可见性 -->
+    <conv:IndexToVisibilityConverter x:Key="IndexVisibility" />
+
+    <sys:Double x:Key="CardCorner">8</sys:Double>
+</ResourceDictionary>

@@ -1,0 +1,272 @@
+<UserControl x:Class="LanTransfer.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:LanTransfer.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}"
+             FontFamily="Microsoft YaHei UI, Segoe UI">
+
+    <Grid Margin="26,23,26,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ======================= 顶部 ======================= -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="设置" Style="{StaticResource TitleText}" />
+            <TextBlock Text="修改端口后请点击「保存并重启网络服务」。程序不会因为端口被占用而崩溃。"
+                       Style="{StaticResource SecondaryText}" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <!-- ======================= 主体 ======================= -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- 基本设置 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="基本设置" Style="{StaticResource SectionTitleText}" />
+
+                        <TextBlock Text="设备名称（在其它电脑上显示的名字）" Style="{StaticResource MutedText}" />
+                        <TextBox Text="{Binding DeviceName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource InputBox}" Margin="0,4,0,12" />
+
+                        <TextBlock Text="默认接收目录" Style="{StaticResource MutedText}" />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Grid.Column="0" Text="{Binding DownloadPath, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource InputBox}" />
+                            <Button Grid.Column="2" Content="浏览…" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding BrowseDownloadPathCommand}" />
+                            <Button Grid.Column="4" Content="打开" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding OpenDownloadPathCommand}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 网络设置 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="网络设置" Style="{StaticResource SectionTitleText}" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="UDP 设备发现端口（默认 39520）"
+                                           Style="{StaticResource MutedText}" />
+                                <TextBox Text="{Binding DiscoveryPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource InputBox}" Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="TCP 文件传输端口（默认 39521）"
+                                           Style="{StaticResource MutedText}" />
+                                <TextBox Text="{Binding TransferPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource InputBox}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="检测端口占用" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding CheckPortsCommand}" />
+                            <Button Content="添加防火墙规则" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Command="{Binding AddFirewallRuleCommand}" />
+                            <Button Content="打开防火墙设置" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Command="{Binding OpenFirewallSettingsCommand}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding PortStatus}" Style="{StaticResource MonoText}" Margin="0,10,0,0"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding PortStatus, Converter={StaticResource StringToVisibility}}" />
+
+                        <TextBlock Text="说明：添加防火墙规则只会开放本程序使用的 TCP / UDP 端口，绝不会关闭 Windows 防火墙。"
+                                   Style="{StaticResource MutedText}" Margin="0,10,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 传输设置 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="传输设置" Style="{StaticResource SectionTitleText}" />
+
+                        <TextBlock Text="分块大小（越大越快，占用内存略高）" Style="{StaticResource MutedText}" />
+                        <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,12" Width="200"
+                                  HorizontalAlignment="Left"
+                                  ItemsSource="{Binding ChunkSizes}"
+                                  SelectedItem="{Binding ChunkSize}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource ByteSize}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <CheckBox Content="自动接收可信设备的文件（无需逐次确认）" Style="{StaticResource SwitchCheck}"
+                                  IsChecked="{Binding AutoAcceptTrustedDevice}" Margin="0,6,0,2" />
+                        <CheckBox Content="显示设备上线 / 离线通知" Style="{StaticResource SwitchCheck}"
+                                  IsChecked="{Binding Notifications}" Margin="0,6,0,2" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 启动与关闭 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="启动与关闭" Style="{StaticResource SectionTitleText}" />
+
+                        <CheckBox Content="开机自动启动" Style="{StaticResource SwitchCheck}"
+                                  IsChecked="{Binding AutoStart}" Margin="0,2" />
+
+                        <TextBlock Text="关闭窗口时" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+                        <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,0" Width="260"
+                                  HorizontalAlignment="Left"
+                                  ItemsSource="{Binding CloseActions}"
+                                  SelectedItem="{Binding CloseAction}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumDisplay}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="选「退出程序」或「最小化到托盘」后，关闭窗口不再重复询问；想恢复询问选「每次询问」。"
+                                   Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 同步设置 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="同步设置" Style="{StaticResource SectionTitleText}" />
+
+                        <TextBlock Text="定期全量扫描间隔" Style="{StaticResource MutedText}" />
+                        <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,12" Width="200"
+                                  HorizontalAlignment="Left"
+                                  ItemsSource="{Binding SyncIntervals}"
+                                  SelectedItem="{Binding SyncScanIntervalMinutes}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StringFormat={}{0} 分钟}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="删除墓碑保留天数（超过后清理已双方确认的删除记录）"
+                                   Style="{StaticResource MutedText}" />
+                        <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,0" Width="200"
+                                  HorizontalAlignment="Left"
+                                  ItemsSource="{Binding TombstoneDays}"
+                                  SelectedItem="{Binding TombstoneRetentionDays}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StringFormat={}{0} 天}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="说明：同步以「相对路径」为唯一标识，不会只比较修改时间；删除操作通过墓碑传播，避免被误判为「新文件」而复活。"
+                                   Style="{StaticResource MutedText}" Margin="0,12,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 日志与外观 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="日志与外观" Style="{StaticResource SectionTitleText}" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="日志级别" Style="{StaticResource MutedText}" />
+                                <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,0"
+                                          ItemsSource="{Binding LogLevels}"
+                                          SelectedItem="{Binding LogLevel}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="主题" Style="{StaticResource MutedText}" />
+                                <ComboBox Style="{StaticResource InputCombo}" Margin="0,4,0,0"
+                                          ItemsSource="{Binding Themes}"
+                                          SelectedItem="{Binding Theme}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Content="打开日志目录" Style="{StaticResource SecondaryButton}" Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Command="{Binding OpenLogFolderCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 本机身份 -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="本机身份（用于配对与信任校验）" Style="{StaticResource SectionTitleText}" />
+
+                        <TextBlock Text="DeviceId" Style="{StaticResource MutedText}" />
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding DeviceId, Mode=OneWay}"
+                                     Style="{StaticResource InputBox}" IsReadOnly="True" />
+                            <Button Grid.Column="2" Content="复制" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding CopyDeviceIdCommand}" />
+                        </Grid>
+
+                        <TextBlock Text="证书指纹（SHA-256）" Style="{StaticResource MutedText}" />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding CertificateFingerprint, Mode=OneWay}"
+                                     Style="{StaticResource InputBox}" IsReadOnly="True" />
+                            <Button Grid.Column="2" Content="复制" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding CopyFingerprintCommand}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ======================= 底部操作栏 ======================= -->
+        <Border Grid.Row="2" Margin="0,14,0,0" Padding="14,12" CornerRadius="8"
+                Background="{StaticResource SidebarBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+            <Grid>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource SecondaryText}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,120,0" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="仅重启网络服务" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding RestartNetworkCommand}" />
+                    <Button Content="保存并重启网络服务" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                            Command="{Binding SaveCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,26 @@
+## Build output
+bin/
+obj/
+dist/
+artifacts/
+
+## User-specific
+*.user
+*.suo
+.vs/
+
+## Test results
+TestResults/
+
+## Local runtime data (never commit secrets / keys / db)
+*.db
+*.db-wal
+*.db-shm
+*.pfx
+*.part
+
+## 本地工作区（AI 助手/构建产物的临时目录，不属于项目源码）
+.workbuddy-ai/
+
+## 日志
+*.log

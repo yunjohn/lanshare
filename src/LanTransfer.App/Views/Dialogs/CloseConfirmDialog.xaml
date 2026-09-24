@@ -1,0 +1,37 @@
+<Window x:Class="LanTransfer.App.Views.Dialogs.CloseConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="关闭 LAN Transfer"
+        Width="460" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBackgroundBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI">
+
+    <Border Style="{StaticResource DialogCard}" Margin="14">
+        <StackPanel>
+            <TextBlock Text="关闭 LAN Transfer" Style="{StaticResource TitleText}" />
+
+            <TextBlock Text="请选择关闭方式。选中项会被记住，之后不再重复询问。"
+                       Style="{StaticResource SecondaryText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+            <RadioButton x:Name="ExitRadio" GroupName="CloseAction" Margin="0,16,0,0"
+                         Content="退出程序（停止接收、传输和实时同步）" />
+            <RadioButton x:Name="TrayRadio" GroupName="CloseAction" Margin="0,10,0,0"
+                         Content="最小化到系统托盘（继续在后台接收与同步）" />
+
+            <CheckBox x:Name="RememberBox" Margin="0,16,0,0"
+                      Content="记住我的选择，以后不再询问" IsChecked="True" />
+
+            <TextBlock Text="之后可在「设置 → 关闭窗口时」改回「每次询问」。"
+                       Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="取消" Style="{StaticResource SecondaryButton}" MinWidth="90"
+                        IsCancel="True" Click="OnCancelClick" />
+                <Button Content="确定" Style="{StaticResource PrimaryButton}" MinWidth="110"
+                        Margin="10,0,0,0" IsDefault="True" Click="OnConfirmClick" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

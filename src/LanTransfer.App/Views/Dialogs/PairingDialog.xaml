@@ -1,0 +1,71 @@
+<Window x:Class="LanTransfer.App.Views.Dialogs.PairingDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设备配对"
+        Width="450" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBackgroundBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI">
+
+    <Border Style="{StaticResource DialogCard}" Margin="14">
+        <StackPanel>
+            <TextBlock Text="设备配对确认" Style="{StaticResource TitleText}" />
+
+            <TextBlock Style="{StaticResource SecondaryText}" Margin="0,6,0,0" TextWrapping="Wrap">
+                <Run Text="正在与 " />
+                <Run Text="{Binding RemoteDeviceName, Mode=OneWay}" FontWeight="SemiBold" />
+                <Run Text=" 建立可信关系。" />
+            </TextBlock>
+
+            <!-- 验证码 -->
+            <Border Margin="0,16,0,0" Padding="18,16" CornerRadius="8"
+                    Background="#E8F0FE" BorderBrush="#BFD6F6" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="请核对两台电脑上显示的验证码是否一致" Style="{StaticResource MutedText}"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding VerificationCode}" HorizontalAlignment="Center"
+                               Margin="0,8,0,0" FontSize="34" FontWeight="Bold" FontFamily="Consolas, monospace"
+                               Foreground="{StaticResource AccentBrush}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 详情 -->
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="设备名称" Style="{StaticResource MutedText}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RemoteDeviceName}"
+                           Style="{StaticResource BodyText}" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="DeviceId" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RemoteDeviceId}"
+                           Style="{StaticResource MonoText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="证书指纹" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RemoteFingerprint}"
+                           Style="{StaticResource MonoText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </Grid>
+
+            <TextBlock Text="配对完成后，本机会记住该设备的证书指纹。如果对方重装程序导致指纹变化，将提示「身份已变化」并要求重新配对。"
+                       Style="{StaticResource MutedText}" Margin="0,16,0,0" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="取消" Style="{StaticResource SecondaryButton}" MinWidth="90"
+                        Click="OnCancelClick" />
+                <Button Content="验证码一致，确认配对" Style="{StaticResource PrimaryButton}" MinWidth="160"
+                        Margin="10,0,0,0" Click="OnConfirmClick" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

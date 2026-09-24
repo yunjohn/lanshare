@@ -1,0 +1,95 @@
+<Window x:Class="LanTransfer.App.Views.Dialogs.IncomingTransferDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="接收文件请求"
+        Width="470" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBackgroundBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI">
+
+    <Border Style="{StaticResource DialogCard}" Margin="14">
+        <StackPanel>
+            <TextBlock Text="收到文件传输请求" Style="{StaticResource TitleText}" />
+
+            <TextBlock Style="{StaticResource SecondaryText}" Margin="0,6,0,0" TextWrapping="Wrap">
+                <Run Text="来自 " />
+                <Run Text="{Binding RemoteDeviceName, Mode=OneWay}" FontWeight="SemiBold" />
+                <Run Text=" 的电脑，请确认是否接收。" />
+            </TextBlock>
+
+            <!-- 信任状态 -->
+            <Border Margin="0,12,0,0" Padding="10,8" CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#FFF7E6" />
+                        <Setter Property="BorderBrush" Value="#F5D08A" />
+                        <Setter Property="BorderThickness" Value="1" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTrusted}" Value="True">
+                                <Setter Property="Background" Value="#EAF7EE" />
+                                <Setter Property="BorderBrush" Value="#A9DCB9" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock Text="{Binding TrustText}" Style="{StaticResource BodyText}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding TrustHint}" Style="{StaticResource MutedText}" Margin="0,3,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- 详情 -->
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="88" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="名称" Style="{StaticResource MutedText}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RootName}" Style="{StaticResource BodyText}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="类型" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TypeText}" Style="{StaticResource BodyText}"
+                           Margin="0,6,0,0" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="文件数量" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FileCountText}" Style="{StaticResource BodyText}"
+                           Margin="0,6,0,0" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="总大小" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TotalSizeText}" Style="{StaticResource BodyText}"
+                           Margin="0,6,0,0" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="首个文件" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0"
+                           Visibility="{Binding HasFirstFile, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FirstFileText}" Style="{StaticResource BodyText}"
+                           Margin="0,6,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding HasFirstFile, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+
+            <TextBlock Text="接收的文件会保存到「设置」中配置的接收目录；同名文件将自动重命名，不会覆盖原有文件。"
+                       Style="{StaticResource MutedText}" Margin="0,14,0,0" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="拒绝" Style="{StaticResource SecondaryButton}" MinWidth="90"
+                        Click="OnRejectClick" />
+                <Button Content="接收" Style="{StaticResource PrimaryButton}" MinWidth="90" Margin="10,0,0,0"
+                        Click="OnAcceptClick" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

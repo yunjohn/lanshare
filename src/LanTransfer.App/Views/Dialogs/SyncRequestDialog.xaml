@@ -1,0 +1,81 @@
+<Window x:Class="LanTransfer.App.Views.Dialogs.SyncRequestDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="同步请求"
+        Width="520" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBackgroundBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI">
+
+    <Border Style="{StaticResource DialogCard}" Margin="14">
+        <StackPanel>
+            <TextBlock Text="对方请求建立文件夹同步" Style="{StaticResource TitleText}" />
+
+            <TextBlock Style="{StaticResource SecondaryText}" Margin="0,6,0,0" TextWrapping="Wrap">
+                <Run Text="{Binding RemoteDeviceName, Mode=OneWay}" FontWeight="SemiBold" />
+                <Run Text=" 希望与本机建立长期同步关系，需要你的授权。" />
+            </TextBlock>
+
+            <Border Margin="0,14,0,0" Padding="10,8" CornerRadius="6"
+                    Background="#FFF7E6" BorderBrush="#F5D08A" BorderThickness="1">
+                <TextBlock Style="{StaticResource SecondaryText}" Foreground="#8A5B00" TextWrapping="Wrap"
+                           Text="同意后，本机会按下面的目录与对方保持同步：新增/修改的文件会在两端自动传输，删除也会同步。请确认该目录内容可以共享。" />
+            </Border>
+
+            <!-- 详情 -->
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="88" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="同步名称" Style="{StaticResource MutedText}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PairName}" Style="{StaticResource BodyText}"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="对端目录" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RequestedRemotePath}"
+                           Style="{StaticResource MonoText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="同步模式" Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0" />
+                <TextBlock Grid.Row="2" Grid.Column="1"
+                           Text="{Binding Request.Mode, Converter={StaticResource EnumDisplay}}"
+                           Style="{StaticResource BodyText}" Margin="0,6,0,0" />
+            </Grid>
+
+            <!-- 本机目录 -->
+            <TextBlock Text="本机同步目录（可以修改）" Style="{StaticResource MutedText}" Margin="0,14,0,0" />
+            <Grid Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- SuggestedLocalPath 是只读默认值，TextBox.Text 默认 TwoWay，必须显式 OneWay -->
+                <TextBox x:Name="LocalPathBox" Grid.Column="0" Text="{Binding SuggestedLocalPath, Mode=OneWay}"
+                         Style="{StaticResource InputBox}" />
+                <Button Grid.Column="2" Content="浏览…" Style="{StaticResource SecondaryButton}"
+                        Click="OnBrowseClick" />
+            </Grid>
+
+            <TextBlock Text="该目录不存在时会自动创建。请勿选择系统目录或包含敏感数据的目录。"
+                       Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="拒绝" Style="{StaticResource SecondaryButton}" MinWidth="90"
+                        Click="OnRejectClick" />
+                <Button Content="同意并创建同步关系" Style="{StaticResource PrimaryButton}" MinWidth="170"
+                        Margin="10,0,0,0" Click="OnAcceptClick" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>
