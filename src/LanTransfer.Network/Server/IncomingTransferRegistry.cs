@@ -114,6 +114,19 @@ public sealed class IncomingTransferRegistry
     private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>
+    /// **非终态**传输的无活动保留时长，超过即回收。
+    ///
+    /// <para>
+    /// 只回收终态条目是不够的：发送端在上传途中崩溃 / 断网 / 被强杀时，接收端这条记录没有任何
+    /// 超时能把它推进到终态（收分块不设超时），它会永远停在 Transferring 并常驻内存。
+    /// 24 小时是「不可能再有正常续传」的量级：正常暂停/断点续传的间隔是分钟到小时级，
+    /// 而真正跨天恢复的场景，发送端重连时会用同一个 transferId 重新登记，
+    /// 断点由磁盘 .part 元数据 + 数据库位图恢复，不会丢进度。
+    /// </para>
+    /// </summary>
+    private static readonly TimeSpan StaleRetention = TimeSpan.FromHours(24);
+
+    /// <summary>
     /// 同一台设备允许同时处于「等待本机用户确认」状态的传输数。
     /// 发送端同时只跑一个发送任务，正常情况恒为 1；留 3 是给「对端重发 / 多文件重试」的余量。
     /// </summary>
@@ -150,7 +163,8 @@ public sealed class IncomingTransferRegistry
         ILogger<IncomingTransferRegistry> logger,
         ISyncPathProvider? syncPaths = null,
         TimeSpan? terminalRetention = null,
-        TimeSpan? sweepInterval = null)
+        TimeSpan? sweepInterval = null,
+        TimeSpan? staleRetention = null)
     {
         _settings = settings;
         _paths = paths;
@@ -162,10 +176,12 @@ public sealed class IncomingTransferRegistry
         _syncPaths = syncPaths;
         _terminalRetention = terminalRetention ?? TerminalRetention;
         _sweepInterval = sweepInterval ?? SweepInterval;
+        _staleRetention = staleRetention ?? StaleRetention;
     }
 
     private readonly TimeSpan _terminalRetention;
     private readonly TimeSpan _sweepInterval;
+    private readonly TimeSpan _staleRetention;
 
     public IReadOnlyCollection<IncomingTransferState> ActiveTransfers => _transfers.Values.ToList();
 
@@ -173,28 +189,50 @@ public sealed class IncomingTransferRegistry
         _transfers.TryGetValue(transferId, out var state) ? state : null;
 
     /// <summary>
-    /// 回收「已进入终态且长时间没有活动」的传输内存状态。
+    /// 回收「长时间没有任何活动」的传输内存状态（终态按 <see cref="TerminalRetention"/>，
+    /// 非终态按 <see cref="StaleRetention"/>）。
     /// 只清理注册表里的条目：数据库中的传输历史与磁盘上的 .part 都保留
     /// （.part 是断点续传与排查所需，历史记录是用户要看的）。
     /// </summary>
-    private void SweepTerminalTransfers()
+    private void SweepStaleTransfers()
     {
         var now = DateTimeOffset.UtcNow;
         if (now - _lastSweep < _sweepInterval) return;
         _lastSweep = now;
 
-        var removed = 0;
+        var terminal = 0;
+        var stale = 0;
 
         foreach (var (id, transfer) in _transfers)
         {
-            if (!transfer.State.IsTerminal()) continue;
-            if (now - transfer.LastActivity < _terminalRetention) continue;
+            var idle = now - transfer.LastActivity;
 
-            if (_transfers.TryRemove(id, out _)) removed++;
+            if (transfer.State.IsTerminal())
+            {
+                if (idle < _terminalRetention) continue;
+                if (_transfers.TryRemove(id, out _)) terminal++;
+                continue;
+            }
+
+            // 非终态但长时间没有任何动静：发送端在上传途中崩溃/断网/被强杀，
+            // 接收端这条记录会**永远**停在 Transferring（没有任何超时会推进它），
+            // 连带它持有的位图、临时文件路径与锁对象一起常驻内存 —— 每次对端中断都漏一条。
+            //
+            // 回收是安全的：发送端重连后会拿同一个 transferId 重新登记，
+            // 断点由 RestoreProgressAsync 从磁盘 .part 元数据 + 数据库位图恢复
+            // （mem 里的进度本来就不是唯一副本）。
+            if (idle < _staleRetention) continue;
+            if (_transfers.TryRemove(id, out _)) stale++;
         }
 
+        var removed = terminal + stale;
+
         if (removed > 0)
-            _logger.LogInformation("已回收 {Count} 个终态传输的内存状态（历史记录与临时文件保留）", removed);
+        {
+            _logger.LogInformation(
+                "已回收 {Count} 个传输的内存状态（终态 {Terminal} / 长期无活动 {Stale}；历史记录与临时文件保留）",
+                removed, terminal, stale);
+        }
     }
 
     /// <summary>
@@ -242,8 +280,8 @@ public sealed class IncomingTransferRegistry
         CreateTransferRequest request, string remoteDeviceId, string remoteDeviceName, bool isTrusted,
         CancellationToken cancellationToken)
     {
-        // 顺带回收长时间处于终态的传输内存状态（限频，不需要额外定时器）
-        SweepTerminalTransfers();
+        // 顺带回收长时间没有活动的传输内存状态（限频，不需要额外定时器）
+        SweepStaleTransfers();
 
         if (string.IsNullOrWhiteSpace(request.TransferId) || string.IsNullOrWhiteSpace(request.FileName))
         {
