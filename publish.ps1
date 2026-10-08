@@ -108,6 +108,28 @@ if (Test-Path $propsPath) {
 
 Write-Host "版本       : $version"
 
+# 记录源码提交号，便于日后核对这个包到底出自哪一版代码。
+$commitSha = 'unknown'
+$commitShort = 'unknown'
+$workingTreeDirty = $false
+try {
+    $resolved = (& git -C $repoRoot rev-parse HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $resolved) {
+        $commitSha = ([string]$resolved).Trim()
+        $commitShort = $commitSha.Substring(0, [Math]::Min(7, $commitSha.Length))
+        $statusLines = @(& git -C $repoRoot status --porcelain 2>$null)
+        $workingTreeDirty = ($statusLines -join '').Trim().Length -gt 0
+    }
+}
+catch {
+    $commitSha = 'unknown'
+    $commitShort = 'unknown'
+}
+
+$commitLabel = $commitShort
+if ($workingTreeDirty) { $commitLabel = "$commitShort（工作区有未提交改动）" }
+Write-Host "源码提交   : $commitLabel"
+
 $packageName = "LanTransfer-$version-$Runtime-portable"
 $publishDir = Join-Path $distRoot $packageName
 $zipPath = Join-Path $distRoot "$packageName.zip"
@@ -199,6 +221,8 @@ LAN Transfer $version — Windows x64 便携版
   TCP 39521  文件传输（HTTPS）
 
 打包信息
+  版本       : $version
+  源码提交   : $commitShort
   运行时     : $Runtime
   自包含     : $SelfContained
   构建配置   : $Configuration
@@ -218,8 +242,20 @@ if (Test-Path $zipPath) {
     Remove-Item -Path $zipPath -Force
 }
 
-Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath -CompressionLevel Optimal
+# 传目录本身（而不是目录下的 *），这样解压后会得到一个顶层文件夹，
+# 不会把四百多个文件散落到用户当前目录里。
+Compress-Archive -Path $publishDir -DestinationPath $zipPath -CompressionLevel Optimal
 Write-Host "已生成 $zipPath"
+
+# ---------------------------------------------------------------- 校验和
+
+Write-Step '生成 SHA-256 校验和'
+
+$hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
+$checksumPath = "$zipPath.sha256"
+"$hash  $packageName.zip" | Out-File -FilePath $checksumPath -Encoding ascii
+Write-Host "SHA-256    : $hash"
+Write-Host "校验和文件 : $checksumPath"
 
 # ---------------------------------------------------------------- 汇总
 
@@ -240,6 +276,7 @@ Write-Host "  便携版目录 : $publishDir"
 Write-Host "  目录大小   : $(Format-Size $dirSize)"
 Write-Host "  压缩包     : $zipPath"
 Write-Host "  压缩包大小 : $(Format-Size $zipSize)"
+Write-Host "  校验和     : $checksumPath"
 Write-Host ''
-Write-Host '  运行方式   : 解压后双击 LanTransfer.exe' -ForegroundColor Green
+Write-Host "  运行方式   : 解压后双击 $packageName\LanTransfer.exe" -ForegroundColor Green
 Write-Host ''
