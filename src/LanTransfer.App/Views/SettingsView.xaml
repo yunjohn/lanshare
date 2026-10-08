@@ -121,6 +121,8 @@
                                   IsChecked="{Binding AutoAcceptTrustedDevice}" Margin="0,6,0,2" />
                         <CheckBox Content="显示设备上线 / 离线通知" Style="{StaticResource SwitchCheck}"
                                   IsChecked="{Binding Notifications}" Margin="0,6,0,2" />
+                        <CheckBox Content="显示文件传输成功 / 失败系统通知" Style="{StaticResource SwitchCheck}"
+                                  IsChecked="{Binding TransferNotifications}" Margin="0,6,0,2" />
                     </StackPanel>
                 </Border>
 
@@ -221,6 +223,10 @@
                 <Border Style="{StaticResource Card}" Margin="0,14,0,0">
                     <StackPanel>
                         <TextBlock Text="本机身份（用于配对与信任校验）" Style="{StaticResource SectionTitleText}" />
+
+                        <TextBlock Text="程序版本" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="{Binding AppVersion, StringFormat=v{0}}"
+                                   Style="{StaticResource MonoText}" Margin="0,4,0,10" />
 
                         <TextBlock Text="DeviceId" Style="{StaticResource MutedText}" />
                         <Grid Margin="0,4,0,10">

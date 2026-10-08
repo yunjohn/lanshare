@@ -3,6 +3,7 @@ using LanTransfer.Common.Constants;
 using LanTransfer.Common.Extensions;
 using LanTransfer.Common.Models;
 using LanTransfer.Common.Protocol;
+using LanTransfer.Core.Files;
 using LanTransfer.Core.Interfaces;
 using LanTransfer.Sync.Conflict;
 using LanTransfer.Sync.Metadata;
@@ -60,7 +61,8 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConcurrentDictionary<string, int> _pendingRuns = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, byte> _runLoops = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource> _runLoops =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<SyncDecision>> _pendingRequests =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -183,6 +185,7 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     private void ScheduleSync(string syncPairId, bool fullScan)
     {
+        if (_lifetime.IsCancellationRequested) return;
         var flags = RunRequested | (fullScan ? FullScanRequested : 0);
         _pendingRuns.AddOrUpdate(syncPairId, flags, (_, current) => current | flags);
         StartRunLoopIfNeeded(syncPairId);
@@ -190,15 +193,21 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     private void StartRunLoopIfNeeded(string syncPairId)
     {
-        if (!_runLoops.TryAdd(syncPairId, 0)) return;
-        _ = Task.Run(() => DrainScheduledRunsAsync(syncPairId), CancellationToken.None);
+        if (_lifetime.IsCancellationRequested) return;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_runLoops.TryAdd(syncPairId, completion)) return;
+        _ = Task.Run(async () =>
+        {
+            try { await DrainScheduledRunsAsync(syncPairId).ConfigureAwait(false); }
+            finally { completion.TrySetResult(); }
+        }, CancellationToken.None);
     }
 
     private async Task DrainScheduledRunsAsync(string syncPairId)
     {
         try
         {
-            while (_pendingRuns.TryRemove(syncPairId, out var flags))
+            while (!_lifetime.IsCancellationRequested && _pendingRuns.TryRemove(syncPairId, out var flags))
                 await SafeSyncAsync(syncPairId, (flags & FullScanRequested) != 0).ConfigureAwait(false);
         }
         finally
@@ -206,7 +215,8 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
             _runLoops.TryRemove(syncPairId, out _);
 
             // 处理“队列刚判断为空、同时又收到文件事件”的窄竞态。
-            if (_pendingRuns.ContainsKey(syncPairId)) StartRunLoopIfNeeded(syncPairId);
+            if (!_lifetime.IsCancellationRequested && _pendingRuns.ContainsKey(syncPairId))
+                StartRunLoopIfNeeded(syncPairId);
         }
     }
 
@@ -248,7 +258,11 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     {
         try
         {
-            await SyncNowAsync(syncPairId, fullScan).ConfigureAwait(false);
+            await SyncNowAsync(syncPairId, fullScan, _lifetime.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // 退出时取消正在运行的同步轮次。
         }
         catch (Exception ex)
         {
@@ -367,19 +381,17 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     public async Task DeletePairAsync(string syncPairId, CancellationToken cancellationToken = default)
     {
-        StopWatcher(syncPairId);
-
         // 必须与正在执行的一轮互斥：否则那一轮会在结束时 UpsertPairAsync 把刚删掉的关系写回库里
         // （并在同一轮继续写 SyncEntries），重启后 InitializeAsync 又会把它加载回来
         // ——用户看到关系被"删掉"了，它却在下次启动后复活并继续同步。
         await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await _repository.DeletePairAsync(syncPairId, cancellationToken).ConfigureAwait(false);
+            StopWatcher(syncPairId);
             _pairs.TryRemove(syncPairId, out _);
             _pendingRuns.TryRemove(syncPairId, out _);
             ResetRetry(syncPairId);
-
-            await _repository.DeletePairAsync(syncPairId, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -392,35 +404,47 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     public async Task SetEnabledAsync(string syncPairId, bool enabled,
         CancellationToken cancellationToken = default)
     {
-        if (!_pairs.TryGetValue(syncPairId, out var pair)) return;
-
         // 暂停同样要与执行中的一轮互斥：本次「暂停」应在这一轮结束后立即生效，
         // 而不是让已经排队的计划继续删/传文件。
         await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (!_pairs.TryGetValue(syncPairId, out var pair)) return;
+
+            var previousEnabled = pair.Enabled;
+            var previousStatus = pair.Status;
             pair.Enabled = enabled;
             pair.Status = enabled ? SyncStatus.Idle : SyncStatus.Paused;
+
+            try
+            {
+                await _repository.UpsertPairAsync(pair, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                pair.Enabled = previousEnabled;
+                pair.Status = previousStatus;
+                throw;
+            }
+
+            if (enabled)
+            {
+                StartWatcher(pair);
+                if (pair.IsInitiator) ScheduleSync(pair.SyncPairId, fullScan: true);
+                else _ = Task.Run(() => NotifyInitiatorAsync(pair), CancellationToken.None);
+            }
+            else
+            {
+                StopWatcher(syncPairId);
+                _pendingRuns.TryRemove(syncPairId, out _);
+            }
+
+            PairChanged?.Invoke(this, pair);
         }
         finally
         {
             _runGate.Release();
         }
-
-        if (enabled)
-        {
-            StartWatcher(pair);
-            if (pair.IsInitiator) ScheduleSync(pair.SyncPairId, fullScan: true);
-            else _ = Task.Run(() => NotifyInitiatorAsync(pair), CancellationToken.None);
-        }
-        else
-        {
-            StopWatcher(syncPairId);
-            _pendingRuns.TryRemove(syncPairId, out _);
-        }
-
-        await _repository.UpsertPairAsync(pair, cancellationToken).ConfigureAwait(false);
-        PairChanged?.Invoke(this, pair);
     }
 
     public Task<IReadOnlyList<SyncConflictRecord>> GetConflictsAsync(string syncPairId,
@@ -572,6 +596,23 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     public async Task<SyncManifestResponse> HandleManifestAsync(SyncManifestRequest request,
         string remoteDeviceId, CancellationToken cancellationToken = default)
     {
+        using var lifetimeLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        cancellationToken = lifetimeLink.Token;
+        await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await HandleManifestCoreAsync(request, remoteDeviceId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _runGate.Release();
+        }
+    }
+
+    private async Task<SyncManifestResponse> HandleManifestCoreAsync(SyncManifestRequest request,
+        string remoteDeviceId, CancellationToken cancellationToken)
+    {
         if (!_pairs.TryGetValue(request.SyncPairId, out var pair))
             return new SyncManifestResponse
             {
@@ -581,10 +622,11 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
                 Message = "本机不存在该同步关系。",
             };
 
-        if (!string.IsNullOrWhiteSpace(pair.RemoteDeviceId) &&
-            !string.Equals(pair.RemoteDeviceId, remoteDeviceId, StringComparison.OrdinalIgnoreCase))
+        if (!pair.Enabled || (!string.IsNullOrWhiteSpace(pair.RemoteDeviceId) &&
+                              !string.Equals(pair.RemoteDeviceId, remoteDeviceId,
+                                  StringComparison.OrdinalIgnoreCase)))
         {
-            _logger.LogWarning("同步清单请求来自非配对设备 {Device}，已拒绝", remoteDeviceId);
+            _logger.LogWarning("同步清单请求来自非配对设备或关系已暂停 {Device}，已拒绝", remoteDeviceId);
             return new SyncManifestResponse
             {
                 Success = false,
@@ -685,6 +727,23 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     public async Task<SimpleOperationResponse> WriteAsync(string syncPairId, string relativePath,
         Stream content, string remoteDeviceId, CancellationToken cancellationToken = default)
     {
+        using var lifetimeLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        cancellationToken = lifetimeLink.Token;
+        await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await WriteCoreAsync(syncPairId, relativePath, content, remoteDeviceId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _runGate.Release();
+        }
+    }
+
+    private async Task<SimpleOperationResponse> WriteCoreAsync(string syncPairId, string relativePath,
+        Stream content, string remoteDeviceId, CancellationToken cancellationToken)
+    {
         var pair = await AuthorizeAsync(syncPairId, remoteDeviceId, cancellationToken).ConfigureAwait(false);
         if (pair is null)
             return Fail(ErrorCodes.SyncPairNotFound, "同步关系不存在或未授权。");
@@ -706,8 +765,7 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
                     .ConfigureAwait(false);
             }
 
-            if (File.Exists(fullPath)) File.Delete(fullPath);
-            File.Move(partPath, fullPath);
+            AtomicFileCommit.Commit(partPath, fullPath);
         }
         catch (Exception ex)
         {
@@ -750,6 +808,23 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     public async Task<SimpleOperationResponse> DeleteAsync(string syncPairId, IReadOnlyList<string> relativePaths,
         string remoteDeviceId, CancellationToken cancellationToken = default)
+    {
+        using var lifetimeLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        cancellationToken = lifetimeLink.Token;
+        await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await DeleteCoreAsync(syncPairId, relativePaths, remoteDeviceId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _runGate.Release();
+        }
+    }
+
+    private async Task<SimpleOperationResponse> DeleteCoreAsync(string syncPairId,
+        IReadOnlyList<string> relativePaths, string remoteDeviceId, CancellationToken cancellationToken)
     {
         var pair = await AuthorizeAsync(syncPairId, remoteDeviceId, cancellationToken).ConfigureAwait(false);
         if (pair is null) return Fail(ErrorCodes.SyncPairNotFound, "同步关系不存在或未授权。");
@@ -861,6 +936,8 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     public async Task<SyncRunResult> SyncNowAsync(string syncPairId, bool fullScan = false,
         CancellationToken cancellationToken = default)
     {
+        using var lifetimeLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        cancellationToken = lifetimeLink.Token;
         var result = new SyncRunResult { SyncPairId = syncPairId };
         var started = DateTimeOffset.UtcNow;
 
@@ -898,6 +975,14 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
         await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (!_pairs.TryGetValue(syncPairId, out var currentPair) || !ReferenceEquals(pair, currentPair) ||
+                !pair.Enabled)
+            {
+                result.ErrorCode = ErrorCodes.SyncPairNotFound;
+                result.Message = "同步关系已删除或暂停。";
+                return result;
+            }
+
             // 同步根不存在时绝不能让扫描结果为空跑进规划器：
             // 那会把两端所有文件都判成「已删除」，直接删掉对端数据。
             if (!Directory.Exists(pair.LocalPath))
@@ -1262,8 +1347,7 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
             }
 
             // 只有完整下载后才原子替换，避免出现半截文件
-            if (File.Exists(fullPath)) File.Delete(fullPath);
-            File.Move(partPath, fullPath);
+            AtomicFileCommit.Commit(partPath, fullPath);
 
             _logger.LogInformation("同步下载完成: {Pair}/{Path}", pair.Name, relativePath);
             return true;
@@ -1381,7 +1465,24 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
     public async Task ResolveConflictAsync(string syncPairId, SyncConflictRecord conflict,
         ConflictResolution resolution, CancellationToken cancellationToken = default)
     {
-        if (!_pairs.TryGetValue(syncPairId, out var pair)) return;
+        using var lifetimeLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        cancellationToken = lifetimeLink.Token;
+        await _runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ResolveConflictCoreAsync(syncPairId, conflict, resolution, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _runGate.Release();
+        }
+    }
+
+    private async Task ResolveConflictCoreAsync(string syncPairId, SyncConflictRecord conflict,
+        ConflictResolution resolution, CancellationToken cancellationToken)
+    {
+        if (!_pairs.TryGetValue(syncPairId, out var pair) || !pair.Enabled) return;
 
         var device = _devices.Find(pair.RemoteDeviceId);
         if (device is null) return;
@@ -1565,18 +1666,26 @@ public sealed class SyncEngine : ISyncServerHandler, ISyncPathProvider, IAsyncDi
 
     public async ValueTask DisposeAsync()
     {
+        if (_lifetime.IsCancellationRequested) return;
         _devices.DeviceOnline -= OnDeviceOnline;
         _scanTimer?.Dispose();
         _scanTimer = null;
 
-        try { _lifetime.Cancel(); } catch { /* 忽略 */ }
-        _lifetime.Dispose();
+        _lifetime.Cancel();
 
         foreach (var watcher in _watchers.Values) watcher.Dispose();
         _watchers.Clear();
+        _pendingRuns.Clear();
+
+        await Task.WhenAll(_runLoops.Values.Select(run => run.Task)).ConfigureAwait(false);
+
+        // 直接调用的同步、远端写入和冲突裁决也使用这把锁。
+        // 等它们退出后才能释放同步引擎与依赖的仓储。
+        await _runGate.WaitAsync().ConfigureAwait(false);
+        _runGate.Release();
 
         _runGate.Dispose();
-        await Task.CompletedTask;
+        _lifetime.Dispose();
     }
 }
 

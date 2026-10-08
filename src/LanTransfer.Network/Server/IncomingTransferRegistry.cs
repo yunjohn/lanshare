@@ -3,6 +3,7 @@ using LanTransfer.Common.Constants;
 using LanTransfer.Common.Extensions;
 using LanTransfer.Common.Models;
 using LanTransfer.Common.Protocol;
+using LanTransfer.Core.Files;
 using LanTransfer.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -849,8 +850,7 @@ public sealed class IncomingTransferRegistry
                 }
             }
 
-            if (File.Exists(file.FinalPath)) File.Delete(file.FinalPath);
-            File.Move(file.PartPath, file.FinalPath);
+            AtomicFileCommit.Commit(file.PartPath, file.FinalPath);
             await _chunks.DeletePartFilesAsync(file.PartPath, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)

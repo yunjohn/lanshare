@@ -167,6 +167,18 @@ public sealed class SyncEngineManifestTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Manifest_WhenPaused_RejectsRemoteRequest()
+    {
+        await _engine.SetEnabledAsync(PairId, false);
+
+        var response = await _engine.HandleManifestAsync(
+            new SyncManifestRequest { SyncPairId = PairId }, RemoteDeviceId);
+
+        Assert.False(response.Success);
+        Assert.Equal(ErrorCodes.Unauthorized, response.ErrorCode);
+    }
+
+    [Fact]
     public async Task Manifest_WhenRootMissing_ReportsRootUnreadable()
     {
         Directory.Delete(_syncRoot, recursive: true);

@@ -78,6 +78,23 @@ public sealed class SafePathResolver : ISafePathResolver
         if (!combined.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
             return false;
 
+        // 字符串前缀不能识别 junction / 符号链接；逐级检查已有节点，
+        // 避免经由同步目录中的链接读写到根目录之外。
+        var current = root;
+        foreach (var segment in segments)
+        {
+            current = Path.Combine(current, segment);
+            try
+            {
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+            }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+
         fullPath = combined;
         return true;
     }

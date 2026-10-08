@@ -75,6 +75,7 @@ public static class ServiceRegistration
         // ---------- UI ----------
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IAutoStartService, AutoStartService>();
+        services.AddSingleton<TransferNotificationTracker>();
 
         services.AddSingleton<TransferViewModel>();
         services.AddSingleton<SyncViewModel>();

@@ -52,6 +52,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<string> Themes { get; } = new[] { "Light", "Dark", "System" };
 
+    public string AppVersion => AppConstants.AppVersion;
+
     [ObservableProperty] private string _deviceName = string.Empty;
 
     [ObservableProperty] private int _discoveryPort;
@@ -75,6 +77,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _autoAcceptTrustedDevice;
 
     [ObservableProperty] private bool _notifications;
+
+    [ObservableProperty] private bool _transferNotifications;
 
     [ObservableProperty] private string _theme = "Light";
 
@@ -107,6 +111,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         CloseAction = settings.CloseAction;
         AutoAcceptTrustedDevice = settings.AutoAcceptTrustedDevice;
         Notifications = settings.Notifications;
+        TransferNotifications = settings.TransferNotifications;
         Theme = settings.Theme;
         LogLevel = settings.LogLevel;
         SyncScanIntervalMinutes = settings.SyncScanIntervalMinutes;
@@ -216,6 +221,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             settings.CloseAction = CloseAction;
             settings.AutoAcceptTrustedDevice = AutoAcceptTrustedDevice;
             settings.Notifications = Notifications;
+            settings.TransferNotifications = TransferNotifications;
             settings.Theme = Theme;
             settings.LogLevel = LogLevel;
             settings.SyncScanIntervalMinutes = SyncScanIntervalMinutes;

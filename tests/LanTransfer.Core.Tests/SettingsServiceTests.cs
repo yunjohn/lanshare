@@ -163,6 +163,22 @@ public class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TransferNotifications_DefaultToOnAndArePersisted()
+    {
+        var service = Create();
+        await service.LoadAsync();
+        Assert.True(service.Current.TransferNotifications);
+
+        var settings = service.Current.Clone();
+        settings.TransferNotifications = false;
+        await service.SaveAsync(settings);
+
+        var reloaded = Create();
+        await reloaded.LoadAsync();
+        Assert.False(reloaded.Current.TransferNotifications);
+    }
+
+    [Fact]
     public async Task SaveAsync_DoesNotLeakTemporaryFile()
     {
         var service = Create();

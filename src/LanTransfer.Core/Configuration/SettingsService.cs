@@ -101,11 +101,13 @@ public sealed class SettingsService : ISettingsService
         {
             EnsureDirectory();
             var temp = _settingsFile + ".tmp";
-
-            await using (var stream = File.Create(temp))
+            // 先异步刷盘，再同步关闭已刷新的文件流。如果使用 await using，
+            // 生成的 DisposeAsync await 可能捕获调用方的 UI SynchronizationContext。
+            using (var stream = File.Create(temp))
             {
                 await JsonSerializer.SerializeAsync(stream, settings, JsonOptions, cancellationToken)
                     .ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
             File.Move(temp, _settingsFile, overwrite: true);

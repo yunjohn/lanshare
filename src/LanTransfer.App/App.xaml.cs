@@ -24,10 +24,24 @@ public partial class App : Application
 {
     private ServiceProvider? _services;
     private ILogger<App>? _logger;
+    private SingleInstanceCoordinator? _singleInstance;
+    private bool _activationPending;
+    private bool _mainWindowReady;
+    private Task? _exitTask;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _singleInstance = new SingleInstanceCoordinator();
+        if (!_singleInstance.TryAcquire())
+        {
+            await _singleInstance.NotifyPrimaryAsync().ConfigureAwait(true);
+            Shutdown();
+            return;
+        }
+
+        _singleInstance.StartListening(() => Dispatcher.BeginInvoke(ActivateExistingWindow));
 
         AppPaths.EnsureCreated();
 
@@ -102,7 +116,7 @@ public partial class App : Application
             MessageBox.Show(
                 $"启动失败：{ex.Message}\n\n详细信息已写入日志：\n{AppPaths.LogDirectory}",
                 "LAN Transfer", MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown(1);
+            await RequestExitAsync(1).ConfigureAwait(true);
             return;
         }
 
@@ -116,6 +130,9 @@ public partial class App : Application
 
             if (startHidden) mainWindow.StartHidden();
             else mainWindow.Show();
+
+            _mainWindowReady = true;
+            if (_activationPending) ActivateExistingWindow();
         }
         catch (Exception ex)
         {
@@ -126,8 +143,21 @@ public partial class App : Application
                 $"启动失败：{ex.Message}\n\n详细信息已写入日志：\n{AppPaths.LogDirectory}",
                 "LAN Transfer", MessageBoxButton.OK, MessageBoxImage.Error);
 
-            Shutdown(1);
+            await RequestExitAsync(1).ConfigureAwait(true);
         }
+    }
+
+    private void ActivateExistingWindow()
+    {
+        if (_mainWindowReady && MainWindow is MainWindow mainWindow)
+        {
+            _activationPending = false;
+            mainWindow.ActivateFromSecondaryInstance();
+            return;
+        }
+
+        // 主实例还在初始化网络与数据库，等窗口创建完成后再激活。
+        _activationPending = true;
     }
 
     private async Task InitializeSubsystemsAsync()
@@ -204,31 +234,54 @@ public partial class App : Application
             "LAN Transfer", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    /// <summary>先停止后台工作并释放资源，再结束 WPF 消息循环。</summary>
+    public Task RequestExitAsync(int exitCode = 0)
+        => _exitTask ??= ExitAfterCleanupAsync(exitCode);
+
+    private async Task ExitAfterCleanupAsync(int exitCode)
     {
         _logger?.LogInformation("================ LAN Transfer 退出 ================");
 
-        if (_services is not null)
+        try
         {
-            await SafeAsync(() => _services.GetRequiredService<IDiscoveryService>().StopAsync(), "停止设备发现");
-            await SafeAsync(() => _services.GetRequiredService<ITransferServer>().StopAsync(), "停止传输服务");
-            await SafeAsync(async () =>
+            if (_services is not null)
             {
-                await _services.GetRequiredService<SyncEngine>().DisposeAsync().ConfigureAwait(false);
-            }, "停止同步引擎");
+                await SafeAsync(() => _services.GetRequiredService<IDiscoveryService>().StopAsync(), "停止设备发现");
+                await SafeAsync(() => _services.GetRequiredService<ITransferServer>().StopAsync(), "停止传输服务");
+                await SafeAsync(async () =>
+                {
+                    await _services.GetRequiredService<SyncEngine>().DisposeAsync().ConfigureAwait(false);
+                }, "停止同步引擎");
 
-            try
-            {
-                await _services.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "释放服务容器时出现异常");
+                try
+                {
+                    await _services.DisposeAsync().ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "释放服务容器时出现异常");
+                }
             }
         }
+        catch (Exception ex)
+        {
+            _logger?.LogCritical(ex, "退出清理失败");
+        }
+        finally
+        {
+            try { await Log.CloseAndFlushAsync().ConfigureAwait(true); }
+            catch { /* 退出阶段已无可靠的日志目标 */ }
 
-        await Log.CloseAndFlushAsync().ConfigureAwait(false);
+            if (MainWindow is MainWindow window) window.AllowApplicationExit();
+            Shutdown(exitCode);
+        }
+    }
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // 清理完成后才会调用 Shutdown；第二实例则在初始化前直接退出。
+        _singleInstance?.Dispose();
+        _singleInstance = null;
         base.OnExit(e);
     }
 }

@@ -40,6 +40,9 @@ public sealed class AppSettings
 
     public bool Notifications { get; set; } = true;
 
+    /// <summary>文件传输成功或失败时显示系统托盘通知。</summary>
+    public bool TransferNotifications { get; set; } = true;
+
     public string Theme { get; set; } = "Light";
 
     public string LogLevel { get; set; } = "Information";

@@ -15,7 +15,11 @@ public static class AppConstants
     public const int ProtocolVersion = 1;
 
     /// <summary>应用语义版本。</summary>
-    public const string AppVersion = "1.0.0";
+    public static string AppVersion { get; } =
+        typeof(AppConstants).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .Single().InformationalVersion;
 
     /// <summary>API 版本前缀。</summary>
     public const string ApiPrefix = "/api/v1";
