@@ -114,11 +114,14 @@ $zipPath = Join-Path $distRoot "$packageName.zip"
 
 # ---------------------------------------------------------------- 清理
 
-Write-Step '清理 dist 目录'
+Write-Step '清理本版本产物'
 
-if (Test-Path $distRoot) {
-    Remove-Item -Path $distRoot -Recurse -Force
-    Write-Host "已删除 $distRoot"
+# 只清理本版本的产物，保留 dist 下其它版本的包，避免误删历史交付物。
+foreach ($stale in @($publishDir, $zipPath)) {
+    if (Test-Path $stale) {
+        Remove-Item -Path $stale -Recurse -Force
+        Write-Host "已删除 $stale"
+    }
 }
 
 New-Item -Path $distRoot -ItemType Directory -Force | Out-Null
